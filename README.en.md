@@ -2,8 +2,8 @@
 
 # Drag & Drop Task Board (Next.js + @dnd-kit / Go Gin + GORM / PostgreSQL / Redis)
 
-[![Release](https://img.shields.io/github/v/release/kite88/mini-kanban)](https://github.com/kite88/mini-kanban/releases/latest)
-[![License](https://img.shields.io/github/license/kite88/mini-kanban)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/kite88/mini-kanban?v=2)](https://github.com/kite88/mini-kanban/releases/latest)
+[![License](https://img.shields.io/github/license/kite88/mini-kanban?v=2)](LICENSE)
 
 Login, user CRUD, department management, project CRUD, task CRUD, a four-column drag & drop board,
 file attachments, a recycle bin (soft delete) and an audit log (with snapshots of physically deleted data).
