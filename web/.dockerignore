@@ -1,0 +1,21 @@
+node_modules
+.next
+out
+npm-debug.log*
+yarn-error.log*
+*.log
+
+# 关键：本地环境变量优先级高于构建参数（.env.local > .env.production > build arg 之外
+# 的进程环境变量关系见 Next 文档），若被打进镜像会让产物内联 http://localhost:8080，
+# 部署后浏览器去访问用户自己的本机端口。因此一律排除。
+.env*
+!.env.example
+
+.git
+.gitignore
+Dockerfile
+.dockerignore
+
+tsconfig.tsbuildinfo
+.vscode
+.idea

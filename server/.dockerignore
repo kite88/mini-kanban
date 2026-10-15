@@ -1,0 +1,28 @@
+# 本地配置（含数据库明文密码等敏感信息），绝不进镜像
+config.yaml
+config.yml
+config.yaml.bak
+
+# 运行时数据（附件上传目录）
+data/
+
+# 本地构建产物与日志
+kanban-server
+kanban-server.exe
+*.log
+out.log
+err.log
+
+# 前端静态导出产物：server 容器只提供接口（页面由 web 容器 + nginx 提供），
+# 不需要它，排除掉可以明显减小构建上下文
+web-dist/
+
+# 编辑器与版本库
+.git/
+.gitignore
+.idea/
+.vscode/
+*.iml
+
+# 测试与文档
+*_test.go

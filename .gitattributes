@@ -1,0 +1,13 @@
+# 统一换行符：仓库内一律存 LF。
+# Windows 上 core.autocrlf=true 会把 checkout 出来的文件转成 CRLF，
+# 而 Dockerfile 的续行与 shell 脚本（如 server/docker-entrypoint.sh）一旦带上 \r
+# 就会在容器里执行失败，因此这几类文件强制 LF。
+* text=auto
+Dockerfile text eol=lf
+*.sh text eol=lf
+*.conf text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+# 反过来：Windows 批处理必须是 CRLF。CI 在 Linux 上检出后要把它打进发布归档，
+# 若沿用 text=auto 的 LF，用户解压拿到的 start.bat 会是 LF 换行，个别命令执行异常。
+*.bat text eol=crlf

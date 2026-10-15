@@ -1,0 +1,269 @@
+name: release
+
+# 推送到 v* 标签时，自动交叉编译后端全部平台产物并创建 / 更新 GitHub Release。
+#
+#   git tag v1.0.0 && git push origin v1.0.0
+#
+# 产物（dist/）只有一种形态：前端以 web-dist/ 目录随包分发，同一个进程、同一个端口
+# 提供接口与页面，一个归档就是一个完整可用的程序，命名带版本号：
+#
+#   mini-kanban-<tag>-windows-amd64.zip      （Linux / macOS 为 .tar.gz）
+#   checksums.txt
+#
+# 产物会先自检（校验和 + 数量 + 文件名带标签），全部通过才发 Release。
+# 带后缀的标签（如 v1.0.0-rc1）会被标记为 prerelease，不会占用 Latest。
+#
+# Release 说明优先取 docs/release-notes/<tag>.md；没有该文件时用一句产物说明加
+# GitHub 自动生成的提交列表。标签已存在 Release 时会改为更新说明并覆盖产物，
+# 因此重打标签可以安全地重新发布。
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # gh release create / upload 需要写权限
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # 冒烟要真的把归档解出来跑一遍（连数据库建表），因此需要一个 PostgreSQL。
+    # POSTGRES_DB 会自动建库：服务只建表不建库，库必须先在。
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: mini_kanban_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d mini_kanban_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Go
+        uses: actions/setup-go@v5
+        with:
+          # Go 模块在 server/ 下，不指定会按仓库根的 go.sum 找缓存而落空
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - name: 静态检查
+        working-directory: server
+        run: go vet ./...
+
+      - name: 单元测试
+        working-directory: server
+        run: go test ./...
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # 顺序要紧：先把前端静态导出到 server/web-dist，build.sh 会把整个目录拷进
+      # 每个归档（不打进二进制，可执行文件因此小一个量级）。
+      - name: 构建前端静态产物（待打包）
+        run: bash build-web-static.sh
+
+      - name: 交叉编译全部平台（带 web-dist 目录，文件名带标签版本号）
+        run: bash build.sh -v "$GITHUB_REF_NAME"
+
+      - name: 校验产物
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum -c checksums.txt
+          # 每个平台一个归档，共 6 个，且文件名必须都带版本号，
+          # 免得发布出一堆分不清版本的包。
+          shopt -s nullglob
+          archives=( *.zip *.tar.gz )
+          expected=6
+          if [ "${#archives[@]}" -ne "$expected" ]; then
+            echo "期望 $expected 个归档，实际 ${#archives[@]} 个: ${archives[*]}" >&2
+            exit 1
+          fi
+          for f in "${archives[@]}"; do
+            case "$f" in
+              *"$GITHUB_REF_NAME"*) ;;
+              *) echo "产物文件名缺少版本号 $GITHUB_REF_NAME: $f" >&2; exit 1 ;;
+            esac
+          done
+          # 包内 version.txt 的内容必须就是标签：确认版本号真的写进了每个包里
+          # （用户拿到后能自报家门，而不是只靠文件名）。
+          # 注意必须逐个归档检查：tar -xzOf 一次传多个归档时，GNU tar 会把后面的
+          # 当成归档内的成员名，直接失败。
+          # 用 grep -x 而不是 grep -q：-q 匹配到就退出，会让上游收到 SIGPIPE，
+          # 在 pipefail 下反而误判为失败。
+          for f in "${archives[@]}"; do
+            case "$f" in
+              *.zip)
+                unzip -p "$f" '*/version.txt' | grep -x "$GITHUB_REF_NAME" >/dev/null \
+                  || { echo "$f 的 version.txt 与标签不一致" >&2; exit 1; }
+                unzip -l "$f" | grep -q 'web-dist/index.html' \
+                  || { echo "$f 缺少 web-dist/index.html" >&2; exit 1; }
+                ;;
+              *.tar.gz)
+                tar -xzOf "$f" --wildcards '*/version.txt' | grep -x "$GITHUB_REF_NAME" >/dev/null \
+                  || { echo "$f 的 version.txt 与标签不一致" >&2; exit 1; }
+                tar -tzf "$f" | grep -q 'web-dist/index.html' \
+                  || { echo "$f 缺少 web-dist/index.html" >&2; exit 1; }
+                ;;
+            esac
+            case "$f" in
+              *.zip) unzip -l "$f" | grep -q 'README.en.md' || { echo "$f 缺少 README.en.md" >&2; exit 1; } ;;
+              *.tar.gz) tar -tzf "$f" | grep -q 'README.en.md' || { echo "$f 缺少 README.en.md" >&2; exit 1; } ;;
+            esac
+          done
+
+      # 开箱即用的关键一条：拿真实归档解压启动，确认页面（web-dist 目录）与接口都通。
+      - name: 冒烟：解包真实跑一遍
+        env:
+          TAG: ${{ github.ref_name }}
+          DB_NAME: mini_kanban_ci
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d)
+          tar -xzf "dist/mini-kanban-${TAG}-linux-amd64.tar.gz" -C "$work"
+          app="$work/mini-kanban-${TAG}-linux-amd64"
+          cd "$app"
+
+          # web-dist 必须与可执行文件同目录，否则页面不可用
+          if [ ! -f web-dist/index.html ]; then
+            echo "归档里没有 web-dist/index.html" >&2
+            exit 1
+          fi
+
+          cat > config.yaml <<EOF
+          server:
+            port: "18281"
+            mode: "release"
+          database:
+            host: "127.0.0.1"
+            port: 5432
+            user: "${DB_USER}"
+            password: "${DB_PASSWORD}"
+            dbname: "${DB_NAME}"
+            sslmode: "disable"
+            logLevel: "warn"
+          redis:
+            host: ""
+          jwt:
+            secret: "ci-only-secret-not-for-production"
+            ttlHours: 24
+          seed:
+            enabled: false
+          storage:
+            dir: "data/uploads"
+            maxSizeMB: 10
+          EOF
+
+          ./mini-kanban > server.log 2>&1 &
+          pid=$!
+          trap 'kill $pid 2>/dev/null || true' EXIT
+
+          ready=""
+          for _ in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:18281/healthz >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            if ! kill -0 $pid 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          if [ -z "$ready" ]; then
+            echo "服务 40 秒内没有就绪，日志如下：" >&2
+            cat server.log >&2
+            exit 1
+          fi
+
+          head -n 3 server.log
+          if ! grep -q '页面同源提供' server.log; then
+            echo "启动日志未显示页面已就绪（web-dist 目录没被识别）" >&2
+            exit 1
+          fi
+
+          # 静态资源带内容哈希，可以长期缓存；页面必须回源校验
+          js=$(cd web-dist && ls _next/static/chunks/*.js | head -n 1)
+          cache=$(curl -sI "http://127.0.0.1:18281/$js" | grep -i '^cache-control' | tr -d '\r')
+          case "$cache" in
+            *immutable*) ;;
+            *) echo "静态资源缺少 immutable 缓存头: $cache" >&2; exit 1 ;;
+          esac
+
+          # 页面必须都能打开（含看板深链），接口未命中必须是 JSON 404 而不是回退成页面
+          for path in / /login/ /projects/ /projects/smoke-project-id /setup; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:18281${path}")
+            printf '%-28s %s\n' "$path" "$code"
+            if [ "$code" != "200" ]; then
+              echo "页面 $path 返回 $code" >&2
+              exit 1
+            fi
+          done
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18281/api/nope)
+          printf '%-28s %s\n' "/api/nope" "$code"
+          if [ "$code" != "404" ]; then
+            echo "/api 未命中时不应回退成页面" >&2
+            exit 1
+          fi
+          echo "冒烟通过：web-dist 页面可用、深链可用、缓存头正确、接口 404 行为正确"
+
+      - name: 创建或更新 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # 没有对应 release-notes 文件时用的默认说明。
+          # 必须用折叠标量（>-）而不是 run 里的多行双引号字符串：YAML 的 flow scalar
+          # 中不能出现空行，那样会让整个 workflow 解析失败（表现为 run 秒失败）。
+          DEFAULT_NOTES: >-
+            只有一个下载物，解压即用：包里是后端可执行文件 + web-dist/ 页面目录，
+            同一个进程、同一个端口同时提供接口与页面，目标机不需要 Node、不需要额外的静态目录，
+            也不需要 nginx 与 CORS。
+
+
+            产物名带版本号，认准 mini-kanban-版本号-系统-架构：Windows 为 .zip，Linux / macOS 为 .tar.gz，
+            均为 CGO_ENABLED=0 静态编译。
+
+
+            用法：完整解压（web-dist/ 必须与可执行文件同目录）→ 运行 start.sh（Windows 双击 start.bat）
+            → 浏览器打开 http://localhost:8281
+            首次运行没有 config.yaml，会自动进入初始化向导：http://localhost:8281/setup
+
+
+            checksums.txt 是全部归档的 SHA256，可用 sha256sum -c 校验。
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          assets=(dist/*.zip dist/*.tar.gz dist/checksums.txt)
+
+          notes_file="docs/release-notes/${tag}.md"
+          if [ -f "$notes_file" ]; then
+            notes_args=(--notes-file "$notes_file")
+            auto_args=()
+          else
+            notes_args=(--notes "$DEFAULT_NOTES")
+            auto_args=(--generate-notes)
+          fi
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" --title "$tag" "${notes_args[@]}"
+            gh release upload "$tag" "${assets[@]}" --clobber
+          else
+            prerelease=()
+            case "$tag" in
+              *-*) prerelease=(--prerelease) ;;
+            esac
+            gh release create "$tag" --title "$tag" "${notes_args[@]}" "${auto_args[@]}" \
+              "${prerelease[@]}" "${assets[@]}"
+          fi
