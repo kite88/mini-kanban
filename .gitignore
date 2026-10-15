@@ -1,0 +1,52 @@
+mini-kanban.exe
+mini-kanban
+out.log
+err.log
+
+# 后端运行时数据（附件上传目录等），不入库
+server/data/
+
+web/node_modules/
+web/.next/
+web/out/
+web/dev.log
+web/dev.err.log
+
+# 前端静态导出产物：由 build-web-static.sh 从 web/out 拷进来，
+# 打包时随发布包分发（不再 go:embed 进二进制），是构建产物不入库
+server/web-dist/
+
+# TypeScript 增量编译缓存（web/tsconfig.json 里 incremental: true 会自动生成），
+# 每次本地构建都会变，入库只会产生无意义的 diff
+*.tsbuildinfo
+
+# 本地配置文件（含数据库密码等敏感信息，请用 config.example.yaml 模板）
+server/config.yaml
+server/config.yml
+config.yaml
+config.yml
+!*.example.yaml
+
+*.log
+.DS_Store
+
+# 本地打包产物（build.sh 的输出目录），是构建产物不入库
+/dist/
+/dist-*/
+
+# 启动脚本的临时验证目录（模拟缺少 exe / exe 异常退出等场景），
+# 属于本地测试产物，不入库
+.bat-test/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# 前端本地环境变量（含接口地址等，请用 .env.example 模板）
+web/.env.local
+web/.env*.local
+
+# docker compose 运行时变量（含数据库密码 / JWT 密钥，请用 .env.example.docker-compose 模板）
+/.env
+/deploy/.env

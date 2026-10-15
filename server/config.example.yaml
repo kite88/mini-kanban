@@ -1,0 +1,85 @@
+# =============================================================
+# mini-kanban 配置模板（config.example.yaml）
+#
+# 使用方式：复制为 config.yaml 后按实际环境修改
+#   Copy-Item config.example.yaml config.yaml     # PowerShell
+#   cp config.example.yaml config.yaml            # Linux / macOS
+#
+# 本文件同时是初始化向导写回配置时的底稿：首次启动若未检测到 config.yaml，
+# 服务会自动进入向导（浏览器打开 http://localhost:8281/setup），
+# 向导按本文件的注释与排版渲染并写出 config.yaml；
+# 想重新配置可设置环境变量 SETUP_FORCE=1（原配置会备份为 .bak）。
+#
+# 说明：
+#   - config.yaml 是配置的唯一来源，代码内不再提供兜底默认值，
+#     必需项缺失或格式非法会在启动阶段直接报错退出；
+#   - config.yaml 已被 .gitignore 忽略（含数据库密码等敏感信息），不要提交到仓库；
+#   - 修改配置后需要重启后端才生效。
+#
+# 查找顺序（CONFIG_FILE 优先，其余按序尝试）：
+#   config.yaml → config.yml → configs/config.yaml → server/config.yaml
+#   → ../config.yaml → ../server/config.yaml
+#
+# 环境变量覆盖（优先级高于配置文件）：
+#   PORT / DB_DSN / REDIS_ADDR（host:port）/ REDIS_PASSWORD / JWT_SECRET
+#
+# 其他环境变量：
+#   CONFIG_FILE   指定配置路径
+#   SETUP_FORCE   取 1|true|yes|on 时强制重新进入向导
+#   SETUP_PORT    向导自身监听端口，默认 8281
+# =============================================================
+
+server:
+  port: "8281"          # 必填。HTTP 监听端口（字符串，建议保留引号）
+  mode: "release"       # 必填。debug | release | test，其他值启动报错
+
+database:
+  # dsn 非空时优先使用（此时下面 host/port/user/dbname/sslmode 不再校验）；
+  # 留空则按 host/port/user/password/dbname/sslmode 拼装（密码自动 URL 转义）
+  dsn: ""               # 例：postgres://postgres:123456@localhost:5432/mini-kanban?sslmode=disable
+  host: "localhost"     # dsn 留空时必填
+  port: 5432            # dsn 留空时必填
+  user: "postgres"      # dsn 留空时必填
+  password: "123456"    # dsn 留空时必填；含特殊字符无需手工转义
+  dbname: "mini-kanban" # dsn 留空时必填；库需提前创建，服务只建表不建库
+  sslmode: "disable"    # dsn 留空时必填；常见取值 disable / require / verify-full
+  preferSimpleProtocol: false  # 出现 pgx 协议兼容问题时可设为 true（关闭扩展查询协议）
+  logLevel: "warn"             # gorm 日志级别：silent | error | warn | info，其他值启动报错。
+                               # 该字段不在初始化向导中显示，只能在本文件里维护
+
+redis:
+  # 可选组件：host 留空表示不启用缓存，此时 port/cacheTTL/userCacheTTL 不再校验，
+  # 服务以无缓存模式运行（GET /healthz 的 redis 字段为 false）
+  host: "localhost"     # 留空即关闭缓存
+  port: 6379            # host 非空时必填
+  password: ""          # 无密码留空
+  db: 0                 # Redis 逻辑库编号
+  cacheTTL: "30s"       # host 非空时必填且需 > 0。项目 / 任务列表缓存时长
+  userCacheTTL: "60s"   # host 非空时必填且需 > 0。用户 / 部门列表缓存时长
+
+jwt:
+  secret: "mini-kanban-dev-secret"  # 必填。生产环境务必换成随机长字符串；
+                                    # 修改后已签发的 token 全部失效
+                                # （附件下载票据的密钥由它单向派生，同样一起失效）
+  ttlHours: 24                  # 必填且需 > 0。token 有效期（小时）；
+                                # 登出后 token 进黑名单，保留至自然过期
+
+seed:
+  # 仅在「用户表为空」时写入初始管理员，已有用户则跳过。
+  # 写入成功后会自动清空本段（enabled=false，下面三项置空），
+  # 避免初始密码长期以明文留在磁盘；需要再次 seed 时重新填写。
+  enabled: false        # 设为 true 时下面三项必填
+  # forceReset 为 true 时不再要求「用户表为空」：无论库里有没有数据，都把
+  # adminEmail 对应的账号重置为管理员并更新密码；该邮箱不存在则新建。
+  # 用于忘记管理员密码、又不便清库重来的场合。成功后本段同样会被自动清空。
+  forceReset: false
+  adminEmail: "admin@mail.example.com"   # 初始管理员登录邮箱
+  adminUsername: "Admin"                 # 初始管理员显示名
+  adminPassword: "123456"                # 初始管理员密码，建议 8 位以上
+
+storage:
+  # 任务附件与富文本内嵌图片的存放目录。
+  # 该段不在初始化向导中显示，只能在本文件里维护。
+  dir: "data/uploads"   # 必填。相对路径按「后端工作目录」解析，不存在会自动创建（需可写）
+  maxSizeMB: 10         # 必填且需 > 0。单个附件大小上限（MB）；
+                        # 单次上传最多 10 个文件，整个请求体上限 = maxSizeMB × 10

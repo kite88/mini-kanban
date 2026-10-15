@@ -1,0 +1,178 @@
+# =============================================================
+# mini-kanban 一键部署：nginx + web(Next.js) + server(Go) + postgres + redis
+#
+# 使用：
+#   cp .env.example.docker-compose .env      # PowerShell: Copy-Item .env.example.docker-compose .env
+#   修改 .env 里的密码与 JWT_SECRET
+#   docker compose up -d --build
+#   浏览器打开 http://<服务器IP>:8080
+#
+# 首次部署若要自动创建管理员，把 .env 里的 SEED_ENABLED 设为 true
+# 并填写 SEED_ADMIN_* 三项；创建成功后建议改回 false。
+# =============================================================
+name: mini-kanban
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  # ---------------- PostgreSQL ----------------
+  # 服务只建表不建库，所以库由 POSTGRES_DB 在容器初始化时创建
+  postgres:
+    image: postgres:16-alpine
+    container_name: mini-kanban-postgres
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mini-kanban}
+      POSTGRES_USER: ${POSTGRES_USER:-mini-kanban}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env 中设置 POSTGRES_PASSWORD}
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mini-kanban} -d ${POSTGRES_DB:-mini-kanban}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - mini-kanban-net
+
+  # ---------------- Redis ----------------
+  # 用于 GET 响应缓存与登出黑名单；后端侧把 REDIS_HOST 置空即可关闭缓存
+  redis:
+    image: redis:7-alpine
+    container_name: mini-kanban-redis
+    restart: unless-stopped
+    logging: *default-logging
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD:?请在 .env 中设置 REDIS_PASSWORD}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?请在 .env 中设置 REDIS_PASSWORD}
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli -a "$$REDIS_PASSWORD" --no-auth-warning ping | grep -q PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - mini-kanban-net
+
+  # ---------------- Go 后端 ----------------
+  # 容器内由 docker-entrypoint.sh 按下面的环境变量生成 config.yaml
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    image: mini-kanban-server:latest
+    container_name: mini-kanban-server
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+
+      # ---- HTTP ----
+      SERVER_PORT: "8281"
+      SERVER_MODE: "release"
+
+      # ---- PostgreSQL ----
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${POSTGRES_USER:-mini-kanban}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env 中设置 POSTGRES_PASSWORD}
+      DB_NAME: ${POSTGRES_DB:-mini-kanban}
+      DB_SSLMODE: disable
+      DB_PREFER_SIMPLE_PROTOCOL: "false"
+      DB_LOG_LEVEL: warn
+
+      # ---- Redis（REDIS_HOST 置空即关闭缓存，服务照常运行）----
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?请在 .env 中设置 REDIS_PASSWORD}
+      REDIS_DB: "0"
+      REDIS_CACHE_TTL: 30s
+      REDIS_USER_CACHE_TTL: 1m
+
+      # ---- JWT（换成随机长字符串；改动会让已签发 token 与下载票据全部失效）----
+      JWT_SECRET: ${JWT_SECRET:?请在 .env 中设置 JWT_SECRET}
+      JWT_TTL_HOURS: "24"
+
+      # ---- 初始管理员（仅在「用户表为空」时写入一次）----
+      SEED_ENABLED: ${SEED_ENABLED:-false}
+      # 置 true 时忽略「用户表为空」的前提，强制重置 / 重建该管理员（仅本次启动生效）
+      SEED_FORCE_RESET: ${SEED_FORCE_RESET:-false}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-}
+      SEED_ADMIN_USERNAME: ${SEED_ADMIN_USERNAME:-}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+
+      # ---- 附件存储（容器内固定绝对路径，挂到 uploads 卷）----
+      STORAGE_DIR: /data/uploads
+      STORAGE_MAX_SIZE_MB: ${STORAGE_MAX_SIZE_MB:-10}
+    volumes:
+      - uploads:/data/uploads
+    networks:
+      - mini-kanban-net
+
+  # ---------------- Next.js 前端 ----------------
+  # NEXT_PUBLIC_* 构建期内联：改地址必须重新 build（docker compose up -d --build web）
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-/api}
+    image: mini-kanban-web:latest
+    container_name: mini-kanban-web
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      NODE_ENV: production
+    networks:
+      - mini-kanban-net
+
+  # ---------------- 统一入口 ----------------
+  # 前端走相对路径 /api，由这里同源反代到后端，顺带规避 CORS 与初始化向导暴露
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: mini-kanban-nginx
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      server:
+        condition: service_healthy
+      web:
+        condition: service_started
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/nginx.conf:ro
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+    networks:
+      - mini-kanban-net
+
+volumes:
+  pgdata:
+  redisdata:
+  uploads:
+
+networks:
+  mini-kanban-net:
+    driver: bridge

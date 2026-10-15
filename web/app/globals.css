@@ -1,0 +1,144 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  height: 100%;
+}
+
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-slate-100 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-200;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-slate-300 dark:bg-slate-700;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 富文本（编辑器与只读展示）内容排版：Tailwind preflight 会清掉列表样式，这里补回来 */
+.rte {
+  line-height: 1.7;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.rte:focus {
+  outline: none;
+}
+
+.rte p {
+  margin: 0 0 0.5rem;
+}
+
+.rte p:last-child {
+  margin-bottom: 0;
+}
+
+.rte h1,
+.rte h2,
+.rte h3,
+.rte h4 {
+  font-weight: 600;
+  margin: 0.75rem 0 0.4rem;
+  line-height: 1.35;
+}
+
+.rte h3 {
+  font-size: 1rem;
+}
+
+.rte ul,
+.rte ol {
+  margin: 0.5rem 0;
+  padding-left: 1.4rem;
+}
+
+.rte ul {
+  list-style: disc;
+}
+
+.rte ol {
+  list-style: decimal;
+}
+
+.rte li {
+  margin: 0.15rem 0;
+}
+
+.rte blockquote {
+  margin: 0.5rem 0;
+  border-left: 3px solid #cbd5e1;
+  padding-left: 0.75rem;
+  color: #64748b;
+}
+
+.rte pre {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  background: #f1f5f9;
+  font-size: 0.85em;
+  overflow-x: auto;
+}
+
+.rte code {
+  padding: 0.1rem 0.3rem;
+  border-radius: 0.25rem;
+  background: #f1f5f9;
+  font-size: 0.85em;
+}
+
+.rte pre code {
+  padding: 0;
+  background: transparent;
+}
+
+.rte a {
+  color: #4f46e5;
+  text-decoration: underline;
+}
+
+.rte img {
+  max-width: 100%;
+  height: auto;
+  margin: 0.35rem 0;
+  border-radius: 0.5rem;
+}
+
+.rte hr {
+  margin: 0.75rem 0;
+  border-color: #e2e8f0;
+}
+
+.dark .rte blockquote {
+  border-color: #475569;
+  color: #94a3b8;
+}
+
+.dark .rte pre,
+.dark .rte code {
+  background: #020617;
+}
+
+.dark .rte a {
+  color: #a5b4fc;
+}
+
+.dark .rte hr {
+  border-color: #334155;
+}
