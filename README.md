@@ -2,8 +2,8 @@
 
 # 拖拽式任务看板（Next.js + @dnd-kit / Go Gin + GORM / PostgreSQL / Redis）
 
-[![Release](https://img.shields.io/github/v/release/kite88/mini-kanban)](https://github.com/kite88/mini-kanban/releases/latest)
-[![License](https://img.shields.io/github/license/kite88/mini-kanban)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/kite88/mini-kanban?v=2)](https://github.com/kite88/mini-kanban/releases/latest)
+[![License](https://img.shields.io/github/license/kite88/mini-kanban?v=2)](LICENSE)
 
 包含登录、用户 CRUD、部门管理、项目 CRUD、任务 CRUD、四列拖拽看板、附件上传、回收箱（软删除）与操作日志（含物理删除快照）。
 
