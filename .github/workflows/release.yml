@@ -97,30 +97,32 @@ jobs:
               *) echo "产物文件名缺少版本号 $GITHUB_REF_NAME: $f" >&2; exit 1 ;;
             esac
           done
-          # 包内 version.txt 的内容必须就是标签：确认版本号真的写进了每个包里
-          # （用户拿到后能自报家门，而不是只靠文件名）。
-          # 注意必须逐个归档检查：tar -xzOf 一次传多个归档时，GNU tar 会把后面的
-          # 当成归档内的成员名，直接失败。
-          # 用 grep -x 而不是 grep -q：-q 匹配到就退出，会让上游收到 SIGPIPE，
-          # 在 pipefail 下反而误判为失败。
+          # 包内必须有：与标签一致的 version.txt、web-dist/index.html、README.en.md。
+          # 三个坑：
+          #  1) 必须逐个归档检查：tar -xzOf 一次传多个归档时，GNU tar 会把后面的
+          #     当成归档内的成员名，直接失败；
+          #  2) grep 不能用 -q：-q 匹配到就退出，上游 tar / unzip 收到 SIGPIPE 报
+          #     "write error"，pipefail 下整条命令被判为失败。这里都用 grep -F / -x
+          #     并把输出丢掉，让上游能安心读完；
+          #  3) unzip / tar 的输出会多出空行，模式串不要锚定。
           for f in "${archives[@]}"; do
             case "$f" in
               *.zip)
                 unzip -p "$f" '*/version.txt' | grep -x "$GITHUB_REF_NAME" >/dev/null \
                   || { echo "$f 的 version.txt 与标签不一致" >&2; exit 1; }
-                unzip -l "$f" | grep -q 'web-dist/index.html' \
+                unzip -l "$f" | grep -F 'web-dist/index.html' >/dev/null \
                   || { echo "$f 缺少 web-dist/index.html" >&2; exit 1; }
+                unzip -l "$f" | grep -F 'README.en.md' >/dev/null \
+                  || { echo "$f 缺少 README.en.md" >&2; exit 1; }
                 ;;
               *.tar.gz)
                 tar -xzOf "$f" --wildcards '*/version.txt' | grep -x "$GITHUB_REF_NAME" >/dev/null \
                   || { echo "$f 的 version.txt 与标签不一致" >&2; exit 1; }
-                tar -tzf "$f" | grep -q 'web-dist/index.html' \
+                tar -tzf "$f" | grep -F 'web-dist/index.html' >/dev/null \
                   || { echo "$f 缺少 web-dist/index.html" >&2; exit 1; }
+                tar -tzf "$f" | grep -F 'README.en.md' >/dev/null \
+                  || { echo "$f 缺少 README.en.md" >&2; exit 1; }
                 ;;
-            esac
-            case "$f" in
-              *.zip) unzip -l "$f" | grep -q 'README.en.md' || { echo "$f 缺少 README.en.md" >&2; exit 1; } ;;
-              *.tar.gz) tar -tzf "$f" | grep -q 'README.en.md' || { echo "$f 缺少 README.en.md" >&2; exit 1; } ;;
             esac
           done
 
@@ -196,8 +198,10 @@ jobs:
           fi
 
           # 静态资源带内容哈希，可以长期缓存；页面必须回源校验
-          js=$(cd web-dist && ls _next/static/chunks/*.js | head -n 1)
-          cache=$(curl -sI "http://127.0.0.1:18281/$js" | grep -i '^cache-control' | tr -d '\r')
+          # 不用 `ls | head` 取文件名：head 提前退出会让 ls 收到 SIGPIPE，
+          # 在 pipefail 下把整条命令判成失败
+          js=$(cd web-dist/_next/static/chunks && for f in *.js; do echo "$f"; break; done)
+          cache=$(curl -sI "http://127.0.0.1:18281/_next/static/chunks/$js" | grep -i '^cache-control' | tr -d '\r')
           case "$cache" in
             *immutable*) ;;
             *) echo "静态资源缺少 immutable 缓存头: $cache" >&2; exit 1 ;;
