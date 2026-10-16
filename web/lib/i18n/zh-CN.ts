@@ -8,8 +8,19 @@
  */
 export const zhCN = {
   // 站点级
-  "app.title": "任务看板",
+  "app.title": "Mini-Kanban",
+  "app.tagline": "任务看板系统",
   "app.description": "Next.js + Go Gin 拖拽式任务看板",
+
+  // 页面名：浏览器标签页标题用的短名，最终标题固定为「页面名 - {app.title}」
+  // （声明在各自路由段的 layout.tsx 里，映射见 lib/i18n/pageTitle.ts）
+  "page.login": "登录",
+  "page.projects": "项目",
+  "page.board": "任务看板",
+  "page.departments": "部门管理",
+  "page.users": "用户管理",
+  "page.logs": "操作日志",
+  "page.trash": "回收箱",
 
   // 通用
   "common.loading": "加载中...",
@@ -64,7 +75,6 @@ export const zhCN = {
   "language.label": "界面语言",
 
   // 登录
-  "login.title": "登录任务看板",
   "login.subtitle": "请使用管理员分配的账号登录",
   "login.email": "邮箱",
   "login.password": "密码",

@@ -1,6 +1,6 @@
 [简体中文](./README.md) | **English**
 
-# Drag & Drop Task Board (Next.js + @dnd-kit / Go Gin + GORM / PostgreSQL / Redis)
+# Mini-Kanban · Drag & Drop Task Board (Next.js + @dnd-kit / Go Gin + GORM / PostgreSQL / Redis)
 
 [![Release](https://img.shields.io/github/v/release/kite88/mini-kanban?v=2)](https://github.com/kite88/mini-kanban/releases/latest)
 [![License](https://img.shields.io/github/license/kite88/mini-kanban?v=2)](LICENSE)
@@ -91,9 +91,12 @@ web/                                       Next.js frontend (App Router + TS + T
                                            MemberPicker / AttachmentList / RichTextEditor /
                                            Modal / ConfirmProvider / UserSelect /
                                            ThemeProvider / ThemeToggle /
-                                           I18nProvider / LanguageToggle
+                                           I18nProvider / LanguageToggle /
+                                           DocumentTitle (tab title)
   lib/i18n/                                i18n: zh-CN.ts (source language + all keys) /
-                                           en.ts / index.ts (negotiation, interpolation, persistence)
+                                           en.ts / index.ts (negotiation, interpolation, persistence) /
+                                           pageTitle.ts (route -> page name) /
+                                           server.ts (server-side language + page metadata)
   lib/labels.ts                            Business enums -> text (column names / roles / log types & actions)
   lib/api.ts                               Request wrapper, token (localStorage), fileUrl
   lib/types.ts                             Types and board column definitions (COLUMNS)
@@ -495,6 +498,10 @@ link shows each visitor the language in their own cookie.
   copy is rendered in that language on the first paint — no "flash of Chinese before switching to English".
   A mirror copy in `localStorage` acts as a fallback when the cookie is cleared.
 - Switching updates the cookie / localStorage / `<html lang>` / request header together, with no page reload.
+- The browser tab title is always **`page name - {app.title}`** (e.g. `Sign in - Mini-Kanban`). Page names are
+  declared as keys in each route segment's `layout.tsx` via `pageMetadata()` (a page is a `"use client"` component
+  and cannot export `metadata`); on client-side navigation and language switches `DocumentTitle` refreshes the title
+  from the same route map in `lib/i18n/pageTitle.ts`.
 - The trade-off: routes become **rendered per request** instead of statically prerendered (because `cookies()` is
   used). The frontend already depends on auth state for data fetching, so the impact is negligible.
 - **This does not hold in static-export mode** (`output: "export"` has no request context): the first paint is always
@@ -510,6 +517,9 @@ link shows each visitor the language in their own cookie.
 | `web/lib/i18n/zh-CN.ts` | **Source language**, and the definition of every copy key (flat dotted `domain.purpose`; `{name}` is an interpolation placeholder) |
 | `web/lib/i18n/en.ts` | English; typed as `Record<MessageKey, string>` — if a key added or renamed in Chinese is missing here, `npm run build` fails immediately |
 | `web/lib/i18n/index.ts` | Language constants, dictionary lookup & interpolation, cookie / localStorage access, `tNow()` |
+| `web/lib/i18n/pageTitle.ts` | Route -> page-name key map plus the `page name - {app.title}` composition (shared by server and client) |
+| `web/lib/i18n/server.ts` | Server-side language cookie read (`currentLang()`) and `pageMetadata()` for route-segment layouts |
+| `web/components/DocumentTitle.tsx` | Refreshes the tab title for the current language (static-export builds can only bake in the default language) |
 | `web/components/I18nProvider.tsx` | Global language provider: `useI18n()` returns `{ lang, locale, setLang, t }` |
 | `web/lib/labels.ts` | Business enum -> copy (board column names, roles, audit log target types / actions); unknown values are echoed as-is |
 

@@ -1,6 +1,6 @@
 **简体中文** | [English](./README.en.md)
 
-# 拖拽式任务看板（Next.js + @dnd-kit / Go Gin + GORM / PostgreSQL / Redis）
+# Mini-Kanban · 拖拽式任务看板（Next.js + @dnd-kit / Go Gin + GORM / PostgreSQL / Redis）
 
 [![Release](https://img.shields.io/github/v/release/kite88/mini-kanban?v=2)](https://github.com/kite88/mini-kanban/releases/latest)
 [![License](https://img.shields.io/github/license/kite88/mini-kanban?v=2)](LICENSE)
@@ -89,9 +89,11 @@ web/                                       Next.js 前端（App Router + TS + Ta
                                            MemberPicker / AttachmentList / RichTextEditor /
                                            Modal / ConfirmProvider / UserSelect /
                                            ThemeProvider / ThemeToggle /
-                                           I18nProvider / LanguageToggle
+                                           I18nProvider / LanguageToggle /
+                                           DocumentTitle（标签页标题）
   lib/i18n/                                多语言：zh-CN.ts（源语言 + 全部键）/
-                                           en.ts / index.ts（协商、插值、持久化）
+                                           en.ts / index.ts（协商、插值、持久化）/
+                                           pageTitle.ts（路由 → 页面名）/ server.ts（服务端语言与页面 metadata）
   lib/labels.ts                            业务枚举 → 文案（列名 / 角色 / 日志类型与动作）
   lib/api.ts                               请求封装、token(localStorage)、fileUrl
   lib/types.ts                             类型与看板列定义（COLUMNS）
@@ -437,6 +439,9 @@ URL 不随语言变化，刷新 / 分享出去的链接对方看到的是自己 
   根布局在服务端读它，用来定 `<html lang>` 与页面标题，正文文案也跟着首屏就渲染成对应语言，
   不会出现「先闪一下中文再切成英文」。`localStorage` 里存一份同名镜像，只在 cookie 被清掉时兜底。
 - 切换语言时 cookie / localStorage / `<html lang>` / 请求头一起更新，无需刷新页面。
+- 标签页标题固定是 **`页面名 - {app.title}`**（如 `登录 - Mini-Kanban`）：页面名在各自路由段的 `layout.tsx`
+  里用 `pageMetadata()` 声明成键（页面本身是 `"use client"`，不能导出 `metadata`），客户端跳转 / 切换语言时
+  由 `DocumentTitle` 按同一张路由映射刷新，两处共用 `lib/i18n/pageTitle.ts`。
 - 代价是路由从静态预渲染变为**按请求渲染**（用了 `cookies()`）。前端本来就依赖登录态取数，影响可忽略。
 - **静态导出模式下这一条不成立**（`output: "export"` 没有请求上下文）：首屏只能按默认语言渲染，
   由 `<head>` 里的内联脚本先纠正 `<html lang>`，挂载后 `I18nProvider` 再按 cookie / localStorage
@@ -450,6 +455,9 @@ URL 不随语言变化，刷新 / 分享出去的链接对方看到的是自己 
 | `web/lib/i18n/zh-CN.ts` | **源语言**，同时是全部文案键的定义（`域.用途` 扁平点号，`{name}` 是插值占位符） |
 | `web/lib/i18n/en.ts` | 英文，类型是 `Record<MessageKey, string>` —— 中文新增 / 改名的键这里没跟上，`npm run build` 直接报缺键 |
 | `web/lib/i18n/index.ts` | 语言常量、字典查找与插值、cookie / localStorage 读写、`tNow()` |
+| `web/lib/i18n/pageTitle.ts` | 路由 → 页面名文案键的映射，以及 `页面名 - {app.title}` 的拼装（服务端与客户端共用这一张表） |
+| `web/lib/i18n/server.ts` | 服务端读语言 cookie（`currentLang()`）与路由段 layout 用的 `pageMetadata()` |
+| `web/components/DocumentTitle.tsx` | 客户端按当前语言刷新标签页标题（静态导出产物构建期只能写死默认语言） |
 | `web/components/I18nProvider.tsx` | 全局语言 Provider：`useI18n()` 取 `{ lang, locale, setLang, t }` |
 | `web/lib/labels.ts` | 业务枚举 → 文案（看板列名、角色、操作日志的对象类型 / 动作），未知值原样回显 |
 
