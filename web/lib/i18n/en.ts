@@ -10,8 +10,18 @@ import type { MessageKey } from "./zh-CN";
  * 这样不需要引入 ICU 复数规则也不会出现 "1 tasks"。
  */
 export const en: Record<MessageKey, string> = {
-  "app.title": "Task Board",
+  "app.title": "Mini-Kanban",
+  "app.tagline": "Task board system",
   "app.description": "Drag-and-drop task board built with Next.js and Go Gin",
+
+  // Page names for the browser tab title, always rendered as "{page name} - {app.title}"
+  "page.login": "Sign in",
+  "page.projects": "Projects",
+  "page.board": "Task board",
+  "page.departments": "Departments",
+  "page.users": "Users",
+  "page.logs": "Activity logs",
+  "page.trash": "Trash",
 
   "common.loading": "Loading...",
   "common.save": "Save",
@@ -60,7 +70,6 @@ export const en: Record<MessageKey, string> = {
   "theme.dark": "Dark",
   "language.label": "Language",
 
-  "login.title": "Sign in to Task Board",
   "login.subtitle": "Use the account assigned by your administrator",
   "login.email": "Email",
   "login.password": "Password",

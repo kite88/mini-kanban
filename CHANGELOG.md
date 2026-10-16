@@ -3,6 +3,34 @@
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)，版本号形如 `v主版本.次版本.修订号`。
 发版说明放在 `docs/release-notes/<tag>.md`（推送 `v*` 标签时由 GitHub Actions 自动创建 Release）。
 
+## [v1.0.1] - 2026-10-16
+
+品牌与标题统一：产品名改为 **Mini-Kanban**，浏览器标签页标题统一成「页面名 - 站点名」。
+功能与接口不变，纯界面文案调整。
+
+### 变更
+
+- **站点名统一为 Mini-Kanban**：`app.title` 由「任务看板」/ `Task Board` 改为 `Mini-Kanban`。导航栏左上角品牌、
+  标签页标题、登录页标题都取同一个键，中英文一致（产品名是专有名词，不参与翻译）。
+- **逐页标签页标题**：新增「`页面名 - {app.title}`」口径（如 `登录 - Mini-Kanban`、`项目 - Mini-Kanban`）。
+  页面本身都是 `"use client"`、不能导出 `metadata`，因此页面名在各自路由段的 `layout.tsx` 里用 `pageMetadata()`
+  声明；路由 → 文案键的映射与拼装集中在新增的 `web/lib/i18n/pageTitle.ts`（服务端与客户端共用同一张表），
+  客户端跳转 / 切换语言时由新增的 `web/components/DocumentTitle.tsx` 同步刷新（静态导出产物在构建期
+  只能写死默认语言）。首页与 404 这类没有页面名的路由只显示 `Mini-Kanban`。
+- **登录页文案**：卡片标题由「登录任务看板」改为 `Mini-Kanban - 任务看板系统`（新增站点级键 `app.tagline`，
+  英文 `Task board system`；原 `login.title` 键删除）。
+- **初始化向导页面标题**：`/setup` 与状态页的 `<title>` 同步为「初始化配置 - Mini-Kanban」「运行状态 - Mini-Kanban」，
+  页内主标题统一成 `Mini-Kanban`（原来是小写的 `mini-kanban`）。
+- **文案键**：新增 `app.tagline` 与 `page.*`（7 个页面名，中英双语），删除 `login.title`。
+- **小重构**：根布局里的 `currentLang()`（服务端读语言 cookie）抽到 `web/lib/i18n/server.ts`，
+  与各路由段 layout 的 `pageMetadata()` 共用，避免每个 layout 重复一遍语言判定。
+
+### 文档
+
+- README（中英）补上标签页标题口径与 `lib/i18n/pageTitle.ts` / `lib/i18n/server.ts` /
+  `components/DocumentTitle.tsx` 三处说明，产品标题挂上 `Mini-Kanban`。
+- 界面截图按新品牌重拍（登录页标题与导航栏品牌文字都变了）。
+
 ## [v1.0.0] - 2026-10-15
 
 首个正式版本：一个可自托管的拖拽式任务看板，**下载一个包、解压即用**。

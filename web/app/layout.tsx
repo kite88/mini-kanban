@@ -1,37 +1,17 @@
 import type { Metadata } from "next";
-import { cookies } from "next/headers";
 import { AuthProvider } from "@/components/AuthProvider";
 import { ConfirmProvider } from "@/components/ConfirmProvider";
+import { DocumentTitle } from "@/components/DocumentTitle";
 import { I18nProvider } from "@/components/I18nProvider";
 import { ThemeProvider, themeInitScript } from "@/components/ThemeProvider";
-import {
-  DEFAULT_LANG,
-  LANG_COOKIE,
-  langInitScript,
-  normalizeLang,
-  translate,
-  type Lang,
-} from "@/lib/i18n";
+import { langInitScript, translate } from "@/lib/i18n";
+import { currentLang } from "@/lib/i18n/server";
 import "./globals.css";
 
 /**
- * 静态导出模式（NEXT_OUTPUT=export）下没有请求上下文，取不到 cookie，
- * 首屏只能按默认语言渲染，挂载后由 I18nProvider 按 cookie / localStorage 纠正。
- * 这是纯静态产物换来的代价：非默认语言的首屏会闪一下（与 Vue dist 这类 SPA 一致）。
+ * 根 metadata 只负责站点名：具体页面（/login、/projects…）的标题由各自路由段的
+ * layout.tsx 声明成「页面名 - {app.title}」，口径见 lib/i18n/pageTitle.ts。
  */
-const STATIC_EXPORT = process.env.NEXT_PUBLIC_STATIC === "1";
-
-/**
- * 服务端读语言 cookie —— 服务端渲染模式下首屏文案的唯一口径。
- * 客户端 I18nProvider 拿到的是同一个值，所以 <html lang>、页面标题与正文文案
- * 在首屏就是对的，不会出现英文界面闪一下中文。
- * （代价是路由由静态预渲染变为按请求渲染，本项目前端本就依赖登录态，影响可忽略。）
- */
-function currentLang(): Lang {
-  if (STATIC_EXPORT) return DEFAULT_LANG;
-  return normalizeLang(cookies().get(LANG_COOKIE)?.value) ?? DEFAULT_LANG;
-}
-
 export function generateMetadata(): Metadata {
   const lang = currentLang();
   return {
@@ -54,6 +34,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen">
         {/* I18nProvider 放在最外层：内部所有组件（含 NavBar / 确认框）都能取到文案 */}
         <I18nProvider initialLang={lang}>
+          {/* 按当前语言刷新标签页标题：静态导出构建期写死的是默认语言，靠它纠正 */}
+          <DocumentTitle />
           <ThemeProvider>
             <AuthProvider>
               <ConfirmProvider>{children}</ConfirmProvider>
