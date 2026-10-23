@@ -1,4 +1,4 @@
-[简体中文](./README.md) | **English**
+[简体中文](./README.md) | [繁體中文](./README.zh-Hant.md) | **English**
 
 # Mini-Kanban · Drag & Drop Task Board (Next.js + @dnd-kit / Go Gin + GORM / PostgreSQL / Redis)
 
